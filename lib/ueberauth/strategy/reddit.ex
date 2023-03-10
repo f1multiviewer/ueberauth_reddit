@@ -3,7 +3,7 @@ defmodule Ueberauth.Strategy.Reddit do
   Reddit strategy for Überauth.
   """
 
-  use Ueberauth.Strategy, scope: "identity"
+  use Ueberauth.Strategy, scope: "identity", ignores_csrf_attack: true
   alias Ueberauth.Auth.{Credentials, Info, Extra}
   alias Ueberauth.Strategy.Reddit.OAuth
 
@@ -21,7 +21,7 @@ defmodule Ueberauth.Strategy.Reddit do
       state: state
     ]
 
-    redirect!(conn, Ueberauth.Strategy.Reddit.OAuth.authorize_url!(opts))
+    redirect!(conn, OAuth.authorize_url!(opts))
   end
 
   @doc """
@@ -29,8 +29,7 @@ defmodule Ueberauth.Strategy.Reddit do
   """
   @spec handle_callback!(Plug.Conn.t()) :: Plug.Conn.t()
   def handle_callback!(%Plug.Conn{params: %{"code" => code}} = conn) do
-    client =
-      Ueberauth.Strategy.Reddit.OAuth.get_token!(code: code, redirect_uri: callback_url(conn))
+    client = OAuth.get_token!(code: code, redirect_uri: callback_url(conn))
 
     if client.token.access_token == nil do
       err = client.token.other_params["error"]
@@ -99,7 +98,9 @@ defmodule Ueberauth.Strategy.Reddit do
   end
 
   defp fetch_user(conn, client) do
-    resp = OAuth2.Client.get(client, "/api/v1/me")
+    config = Application.get_env(:ueberauth, Ueberauth.Strategy.Reddit.OAuth)
+    headers = Keyword.get(config, :headers, [{"User-Agent", "ueberauth"}])
+    resp = OAuth2.Client.get(client, "/api/v1/me", headers)
 
     case resp do
       {:ok, %OAuth2.Response{status_code: 401, body: _body}} ->
